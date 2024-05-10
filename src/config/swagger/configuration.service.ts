@@ -1,9 +1,10 @@
-import { INestApplication } from "@nestjs/common";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { INestApplication, Injectable } from "@nestjs/common";
 import { DocumentBuilder, SwaggerDocumentOptions, SwaggerModule } from "@nestjs/swagger";
 
-export class SwaggerConfig {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	static build(mainModule: any, app: INestApplication, path: string): void {
+@Injectable()
+export class SwaggerConfigService {
+	build(mainModule: any, app: INestApplication, path: string) {
 		const config = new DocumentBuilder()
 			.setTitle("Venda de Encomenda MS")
 			.setDescription("MS for Natalia Glam")
