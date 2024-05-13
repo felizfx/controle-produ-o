@@ -12,6 +12,7 @@ export class CartController {
 
 	@Post("calcprices")
 	calcPrices() {
+		this.cartService.calcPriceDois();
 		return this.cartService.calcPrice();
 	}
 
