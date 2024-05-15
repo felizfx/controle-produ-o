@@ -1,15 +1,19 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
+import { Injectable, NotFoundException, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Cart } from "./entities/cart.entity";
 import { ProducerService } from "../../providers/queue/kafka/producer.service";
 import { ConsumerService } from "src/providers/queue/kafka/consumer.service";
+import { CreateOrderDto } from "./dtos/create-order.dto";
+import { Product } from "./entities/product.entity";
 
 @Injectable()
 export class CartService implements OnModuleInit {
 	constructor (
         @InjectRepository(Cart)
         private readonly cartRepository: Repository<Cart>,
+		@InjectRepository(Product)
+        private readonly productRepository: Repository<Product>,
 		private readonly consumerService: ConsumerService,
 		private readonly producerService: ProducerService
 	) {}
@@ -23,52 +27,75 @@ export class CartService implements OnModuleInit {
 		}
 	}
 
-	//producers
-	async calcPrice() {
+	async calcPrice(productId: string, count: number) {
+		const product = await this.productRepository.findOne({ where: { idProd: productId } });
+		if (!product) throw new NotFoundException("Produto não encontrado");
+		const price = product.valor * count;
+		return price;
+	}
+
+	//producers testes
+	async postCart(data: CreateOrderDto) {
 		this.producerService.produce({
 			topic: "carrinho_fechado",
 			messages: [{
-				value: JSON.stringify({
-					id: 1234567890,
-					count: 8
-				}),
-				key: "second message"
+				value: JSON.stringify(data)
 			}]
 		});
 	}
 
-	async calcPriceDois() {
+	async postPaymentConfirm(data: { clientCpf: number }) {
 		this.producerService.produce({
-			topic: "carrinho_teste",
+			topic: "status_pagamento",
 			messages: [{
-				value: JSON.stringify({
-					id: 1234567890,
-					count: 8
-				}),
-				key: "teste message"
+				value: JSON.stringify({ clientCpf: 52998224725, isPayed: true})
+			}]	
+		});
+	}
+
+	//producers oficiais
+	// postar no topico de pagamento
+	async postPayment(data: { clientCpf: number, price: number }) {
+		this.producerService.produce({
+			topic: "pagamento_cliente",
+			messages: [{
+				value: JSON.stringify(data)
 			}]
+		});
+	}
+
+	// postar no topico de producao
+	async postProduction(data: { porductId: string, count: number}) {
+		this.producerService.produce({
+			topic: "producao_pedido",
+			messages: [{
+				value: JSON.stringify(data)
+			}]	
 		});
 	}
 
 	// consumers
 	async onModuleInit() {
+		// calcular preço total e enviar para pagamento
 		await this.consumerService.consume({topics: ["carrinho_fechado"]}, {
 			autoCommit: true,
-			eachMessage: async ({ message, topic }) => {
-				console.log({
-					topic: topic.toString(),
-					message: JSON.parse(message.value.toString())
-				});
+			eachMessage: async ({ message }) => {
+				const payload = JSON.parse(message.value.toString());
+				const price = Number(await this.calcPrice(payload.productId, payload.count));
+				this.postPayment({ clientCpf: payload.clientCpf, price });
 			}
 		});
 
-		await this.consumerService.consume({topics: ["carrinho_teste"]}, {
-			eachMessage: async ({ message, topic }) => {
+		// sucesso no pagamento
+		await this.consumerService.consume({topics: ["status_pagamento"]}, {
+			autoCommit: true,
+			eachMessage: async ({ message }) => {
 				console.log({
-					topic: topic.toString(),
-					message: JSON.parse(message.value.toString())
+					value: JSON.parse(message.value.toString())
 				});
 			}
 		});
 	}
+
+
 }

@@ -7,7 +7,7 @@ export class Cart {
     idCart: number;
 
     @Column({ name: "prod_car" })
-    prodCart: number; 
+    prodCart: string; 
 
     @Column({ name: "qnt_prod_car" })
     qntProdCart: number; 
